@@ -24,6 +24,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c8bcebdf-1a3b-458e-a5a7-205520a75fee"
+      }
+    },
+    "owner": "esslam"
   }
 }
