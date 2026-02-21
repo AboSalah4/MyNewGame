@@ -17,7 +17,6 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [lastScore, setLastScore] = useState(null);
 
-  // This ensures the game only restarts when 'running' becomes true
   const gameEntities = useMemo(
     () => Entities(hardMode),
     [running === true && score === 0],
