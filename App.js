@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -8,6 +8,7 @@ import {
   Switch,
 } from "react-native";
 import { GameEngine } from "react-native-game-engine";
+import { Audio } from "expo-av";
 import Entities from "./Entities";
 import Physics from "./physics";
 
@@ -17,19 +18,80 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [lastScore, setLastScore] = useState(null);
 
+  const bgmRef = useRef(null);
+  const isGameOver = useRef(false);
+
+  const playEffect = async (file) => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(file);
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) sound.unloadAsync();
+      });
+    } catch (error) {
+      console.log("Audio Error:", error);
+    }
+  };
+
+  const handleStartGame = () => {
+    isGameOver.current = false;
+    setScore(0);
+    setRunning(true);
+
+    // 1. Play the start sound immediately
+    playEffect(require("./assets/start.mp3"));
+
+    // 2. Wait 1 second (1000ms), then start the background music
+    setTimeout(async () => {
+      // Safety check: Don't start the music if they crashed in the first second!
+      if (isGameOver.current) return;
+
+      if (bgmRef.current) {
+        try {
+          await bgmRef.current.unloadAsync();
+        } catch (e) {}
+      }
+
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          require("./assets/funny.mp3"),
+          { isLooping: true },
+        );
+        bgmRef.current = sound;
+        await sound.playAsync();
+      } catch (error) {
+        console.log("BGM Error:", error);
+      }
+    }, 1000);
+  };
+
+  const onEvent = (e) => {
+    if (e.type === "game-over" && !isGameOver.current) {
+      isGameOver.current = true;
+
+      setRunning(false);
+      setLastScore(score);
+
+      if (bgmRef.current) {
+        bgmRef.current
+          .stopAsync()
+          .then(() => {
+            bgmRef.current.unloadAsync();
+            bgmRef.current = null;
+          })
+          .catch((err) => console.log("Stop BGM Error:", err));
+      }
+
+      playEffect(require("./assets/collision.mp3"));
+    } else if (e.type === "score" && !isGameOver.current) {
+      setScore((prev) => prev + 1);
+    }
+  };
+
   const gameEntities = useMemo(
     () => Entities(hardMode),
     [running === true && score === 0],
   );
-
-  const onEvent = (e) => {
-    if (e.type === "game-over") {
-      setLastScore(score);
-      setRunning(false);
-    } else if (e.type === "score") {
-      setScore((prev) => prev + 1);
-    }
-  };
 
   if (!running) {
     return (
@@ -46,13 +108,7 @@ export default function App() {
           <Text style={styles.label}>Hard Mode:</Text>
           <Switch value={hardMode} onValueChange={setHardMode} />
         </View>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => {
-            setScore(0);
-            setRunning(true);
-          }}
-        >
+        <TouchableOpacity style={styles.button} onPress={handleStartGame}>
           <Text style={styles.buttonText}>
             {lastScore !== null ? "TRY AGAIN" : "START GAME"}
           </Text>
