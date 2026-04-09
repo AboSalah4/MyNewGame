@@ -13,14 +13,21 @@ import Entities from "./Entities";
 import Physics from "./physics";
 
 export default function App() {
+  // State for UI management
   const [running, setRunning] = useState(false);
   const [hardMode, setHardMode] = useState(false);
   const [score, setScore] = useState(0);
   const [lastScore, setLastScore] = useState(null);
 
+  // FEATURE 1: useRef for non-UI states
+  // We use refs to store the background music and collision lock.
+  // This prevents the app from re-rendering every time the music starts or stops.
   const bgmRef = useRef(null);
   const isGameOver = useRef(false);
 
+  // FEATURE 2: Clean Memory Management
+  // unloadAsync ensures we delete the sound from the device's RAM
+  // once it's done playing, preventing crashes over time.
   const playEffect = async (file) => {
     try {
       const { sound } = await Audio.Sound.createAsync(file);
@@ -33,66 +40,61 @@ export default function App() {
     }
   };
 
+  // FEATURE 3: Audio Sequencing
+  // Using setTimeout creates a professional feel by playing the 'Start'
+  // effect 1 second before the looping music begins.
   const handleStartGame = () => {
     isGameOver.current = false;
     setScore(0);
     setRunning(true);
-
-    // 1. Play the start sound immediately
     playEffect(require("./assets/start.mp3"));
 
-    // 2. Wait 1 second (1000ms), then start the background music
     setTimeout(async () => {
-      // Safety check: Don't start the music if they crashed in the first second!
       if (isGameOver.current) return;
-
       if (bgmRef.current) {
         try {
           await bgmRef.current.unloadAsync();
         } catch (e) {}
       }
-
-      try {
-        const { sound } = await Audio.Sound.createAsync(
-          require("./assets/funny.mp3"),
-          { isLooping: true },
-        );
-        bgmRef.current = sound;
-        await sound.playAsync();
-      } catch (error) {
-        console.log("BGM Error:", error);
-      }
+      const { sound } = await Audio.Sound.createAsync(
+        require("./assets/funny.mp3"),
+        { isLooping: true },
+      );
+      bgmRef.current = sound;
+      await sound.playAsync();
     }, 1000);
   };
 
+  // FEATURE 4: The Collision Lock
+  // isGameOver.current acts as a 'gate' so the game-over logic
+  // fires exactly once, even if multiple collisions are detected.
   const onEvent = (e) => {
     if (e.type === "game-over" && !isGameOver.current) {
       isGameOver.current = true;
-
       setRunning(false);
       setLastScore(score);
 
       if (bgmRef.current) {
-        bgmRef.current
-          .stopAsync()
-          .then(() => {
-            bgmRef.current.unloadAsync();
-            bgmRef.current = null;
-          })
-          .catch((err) => console.log("Stop BGM Error:", err));
+        bgmRef.current.stopAsync().then(() => {
+          bgmRef.current.unloadAsync();
+          bgmRef.current = null;
+        });
       }
-
       playEffect(require("./assets/collision.mp3"));
     } else if (e.type === "score" && !isGameOver.current) {
       setScore((prev) => prev + 1);
     }
   };
 
+  // FEATURE 5: Optimization with useMemo
+  // Entities are only recalculated when the game restarts, saving battery and CPU.
   const gameEntities = useMemo(
     () => Entities(hardMode),
     [running === true && score === 0],
   );
 
+  // FEATURE 6: Minimalist UI
+  // Simple conditional rendering switches between the Menu and the Game Engine.
   if (!running) {
     return (
       <View style={styles.menuContainer}>
